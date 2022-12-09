@@ -26,6 +26,6 @@
 int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,LPSTR szCmdLine,int iCmdShow) 
 
 {
-	
-	StartServer(6667);
+	int port = atoi(szCmdLine);
+	StartServer(port);
 }

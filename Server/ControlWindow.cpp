@@ -47,3 +47,4 @@ HWND CW_Create(DWORD uhid, DWORD width, DWORD height)
    ShowWindow(hWnd, SW_SHOW); 
    return hWnd;
 }
+
