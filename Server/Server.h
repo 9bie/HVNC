@@ -1,4 +1,4 @@
 #include "Common.h"
 #include "ControlWindow.h"
 
-BOOL StartServer(int port);
+BOOL StartServer2(int port);
